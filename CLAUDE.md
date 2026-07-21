@@ -28,5 +28,6 @@ py ipsi.py --refresh 대학명=고려대       # 시트 새로고침 후 조회
 ## 접근
 
 - Google Sheets API + 서비스 계정. `credentials.json`(서비스 계정 키)은 커밋 금지(gitignore).
+- credentials.json은 구글 드라이브 클로드 폴더에 넣어놨음. 확인할 것
 - 대상 시트는 서비스 계정 이메일에 뷰어로 공유되어 있어야 함.
 - 콘솔 한글 깨짐 방지: `PYTHONUTF8=1` 로 실행.
