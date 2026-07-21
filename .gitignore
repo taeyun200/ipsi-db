@@ -1,0 +1,7 @@
+credentials.json
+cache_fact.json
+Lib/
+Scripts/
+Include/
+pyvenv.cfg
+__pycache__/
