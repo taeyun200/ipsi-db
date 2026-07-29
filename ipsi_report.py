@@ -10,7 +10,7 @@
   py ipsi_report.py 대학명=서울시립대 학년도=2028 모집기간=정시 --refresh
 
 - 필터: key=value AND. 값은 부분일치(공백 여러 토큰이면 모두 포함). 학년도는 콤마로 여러 개(비교).
-- --by=콤마열: 그룹 컬럼. 생략 시 수시=전형유형,세부전형 / 정시=지원군,세부전형.
+- --by=콤마열: 그룹 컬럼. 생략 시 수시=전형유형,세부전형 / 정시=전형유형,세부전형,지원군(전형유형 소계).
 - 학년도 2개면 두 해 + 증감 열. 첫 그룹컬럼별 소계 자동.
 - 수시인데 세부전형에 '군' 표기가 있으면 정시 오분류로 보고 제외하고 경고.
 """
@@ -64,7 +64,7 @@ def main():
     if not sel:
         print("조건에 맞는 행 없음:", fils, "학년도", years); return
     if not by:
-        by = ["전형유형","세부전형"] if "수시" in gi else ["지원군","세부전형"]
+        by = ["전형유형","세부전형"] if "수시" in gi else ["전형유형","세부전형","지원군"]
     if not years:
         years = sorted({r["학년도"] for r in sel})
 
@@ -73,8 +73,18 @@ def main():
     for r in sel:
         key = tuple(r.get(c,"") for c in by)
         agg[key+(r["학년도"],)] += int(r["값"])
-    groupkeys = sorted({k[:-1] for k in agg},
-                       key=lambda g:-agg.get(g+(years[-1],),0))
+    # 정렬: 상위 그룹은 규모(마지막 연도) 내림차순, 지원군은 가나다 오름차순.
+    ly = years[-1]
+    GUN = {"가":0,"나":1,"다":2,"라":3,"마":4}
+    def pref_total(prefix):
+        return sum(v for k,v in agg.items() if k[-1]==ly and k[:len(prefix)]==prefix)
+    def sortkey(g):
+        out=[]
+        for i,c in enumerate(by):
+            if c=="지원군": out.append((0, GUN.get(g[i],9), g[i]))
+            else: out.append((-pref_total(g[:i+1]), g[i]))
+        return out
+    groupkeys = sorted({k[:-1] for k in agg}, key=sortkey)
 
     w = [max(len(by[i]), *(len(k[i]) for k in groupkeys)) for i in range(len(by))]
     hdr = " | ".join(f"{by[i]:{w[i]}}" for i in range(len(by)))
