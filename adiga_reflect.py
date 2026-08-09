@@ -55,7 +55,7 @@ def xlsx_rows(엑셀대학명, dirpath=None):
     """4년제전체_{수시,정시}_2026.xlsx 에서 한 대학 행을 parse() 출력 형식으로 뽑는다.
     (엑셀은 이미 미제출·최초0 제거된 크롤 결과 — 재크롤 불필요)"""
     import openpyxl
-    d = Path(dirpath or HERE)
+    d = Path(dirpath or (HERE / "output"))
     out = []
     for gigan in ("수시", "정시"):
         f = d / f"4년제전체_{gigan}_2026.xlsx"

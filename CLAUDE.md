@@ -28,14 +28,17 @@ py ipsi.py --refresh 대학명=고려대       # 시트 새로고침 후 조회
 ## 작업 파이프라인
 
 작업 규칙은 파이프라인별 파일로 분리 관리한다(토큰 절약 — **해당 작업 때 그 파일만 Read**).
-CLAUDE.md는 이름·포인터만 유지한다.
+CLAUDE.md는 이름·포인터만 유지한다. **파이프라인 문서는 `docs/`, 입력 데이터는 `data/`, 크롤 산출 엑셀은 `output/`.** 스크립트(`*.py`)·설정·`cache_fact.json`은 루트.
 
-- **시트반영** → `시트반영.md`
+- **시트반영** → `docs/시트반영.md`
   외부/어디가 자료를 매칭·검산해 구글시트(`01_fact_admissions`)에 반영.
   척도매핑(수시=내신·정시=대학제공/백분위)·값매칭·독립2경로 검산·`adiga_parse`/`adiga_reflect`.
-- **엑셀산출** → `엑셀산출.md`
-  어디가 XHR 크롤로 대학별 입결을 **수시/정시 엑셀**로 산출. 미제출 행 제거·`adiga_xlsx`.
-- **평가기준DB** → `평가기준DB.md`
+- **엑셀산출** → `docs/엑셀산출.md`
+  어디가 XHR 크롤로 대학별 입결을 **수시/정시 엑셀**(`output/`)로 산출. 미제출 행 제거·`adiga_xlsx`.
+- **모집인원크롤** → `docs/모집인원크롤.md`
+  어디가 '모집인원' 페이지(`univDetailRecruit`)에서 모집단위별 모집인원+전형방법 크롤.
+  `univRecruitAjax`/`SubjectPopup`/`ChangePopup`(변경사항=공식총계 교차검산). 입결 크롤과 다른 경로.
+- **평가기준DB** → `docs/평가기준DB.md`
   어디가 '전형별 주요사항'(종합·교과·수능)을 대학×전형유형×섹션으로 쪼개 SQLite 적재. `adiga_criteria_db.py`.
   시트에는 넣지 않음(서술·표라 지표/척도/값 규칙에 안 맞음).
 - **인원조회출력** → 스킬 `ipsi-report` (`.claude/skills/ipsi-report/`)
