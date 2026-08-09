@@ -113,8 +113,10 @@ def _pick(cands, mo, gb):
     by_both = [c for c in by_mo if c.get("경쟁률")==gb and gb not in (None,"0")]
     return by_both if len(by_both)==1 else by_mo
 
-def match_row(r, idx, strict=True):
-    """strict=False면 경쟁률 불일치도 매칭으로 보고 사유를 info로 돌려준다(정정 대상 추출용)."""
+def match_row(r, idx, strict=True, unit_only=False):
+    """strict=False면 경쟁률 불일치도 매칭으로 보고 사유를 info로 돌려준다(정정 대상 추출용).
+    unit_only=True면 모집단위명이 안 맞는 값전용 폴백을 끈다(한 엑셀을 여러 캠퍼스에
+    돌릴 때, 값이 우연히 같은 타캠퍼스 학과로 오귀속되는 것을 막음)."""
     gi, gun = r["모집기간"], r["지원군"]
     unit, se = norm(r["모집단위"]), nse(r["세부전형"])
     mo, gb = num(r["최초"]), num(r["경쟁률"])
@@ -124,9 +126,12 @@ def match_row(r, idx, strict=True):
         lambda: idx.get((gi, gun, unit, se), []),                          # 모집단위+세부전형
         lambda: idx.get((gi, gun, norm(ALIAS.get(r["모집단위"], "")), se), []),  # 개명 별칭
         lambda: [c for k, cl in same if k[2] == unit for c in cl],         # 모집단위명만(세부전형 라벨 불일치)
-        lambda: [c for k, cl in same if k[3] == se for c in cl],           # 세부전형만(모집단위명 불일치)
-        lambda: [c for _, cl in same for c in cl],                         # 값으로만
     ]
+    if not unit_only:
+        routes += [
+            lambda: [c for k, cl in same if k[3] == se for c in cl],       # 세부전형만(모집단위명 불일치)
+            lambda: [c for _, cl in same for c in cl],                     # 값으로만
+        ]
     cands = []
     for route in routes:
         cands = _pick(list(route()), mo, gb)
@@ -152,10 +157,10 @@ def match_row(r, idx, strict=True):
         note = (note + " / " if note else "") + "모집인원차:최초%s/시트%s" % (mo, s.get("모집인원"))
     return s, note
 
-def reflect(rows, idx):
+def reflect(rows, idx, unit_only=False):
     out, held, moflag, recount = [], [], [], Counter()
     for r in rows:
-        s, info = match_row(r, idx)
+        s, info = match_row(r, idx, unit_only=unit_only)
         if s is None:
             held.append((r["모집기간"],r["세부전형"],r["모집단위"],num(r["최초"]),num(r["경쟁률"]),info)); continue
         if info: moflag.append((r["모집기간"],r["모집단위"],r["세부전형"],info))
@@ -167,10 +172,10 @@ def reflect(rows, idx):
             out.append(ident+[ji,ch,v]); recount[(r["모집기간"],ji,ch)]+=1
     return out, held, moflag, recount
 
-def verify(rows, idx, recount):
+def verify(rows, idx, recount, unit_only=False):
     chk = Counter()
     for r in rows:
-        s, _ = match_row(r, idx)
+        s, _ = match_row(r, idx, unit_only=unit_only)
         if s is None: continue
         for col, ji, ch in MAP[r["모집기간"]]:
             v = num(r.get(col))
@@ -186,7 +191,7 @@ def _api():
     return build("sheets","v4",credentials=creds).spreadsheets().values()
 
 
-def rate_fixes(rows, cache, 대학명):
+def rate_fixes(rows, cache, 대학명, unit_only=False):
     """매칭은 되는데 경쟁률만 다른 행 → 어디가 값으로 정정할 (시트행번호, 새값) 목록.
     캐시 인덱스 i ↔ 시트 행 i+2 (ipsi.py fetch가 A1부터 순서대로 읽어 저장)."""
     rowno = {}                                   # 식별컬럼 → 경쟁률 셀 행번호
@@ -196,7 +201,7 @@ def rate_fixes(rows, cache, 대학명):
     idx = build_index(cache, 대학명, "2026")
     out = []
     for r in rows:
-        s, info = match_row(r, idx, strict=False)
+        s, info = match_row(r, idx, strict=False, unit_only=unit_only)
         if s is None or not (info or "").startswith("경쟁률 불일치"): continue
         ident = s["ident"]
         rn = rowno.get(tuple(ident.get(x, "") for x in COLS[:13]))
@@ -220,7 +225,7 @@ def main():
     cache = json.load(open(CACHE, encoding="utf-8"))
 
     if "--fix-rate" in sys.argv:                  # 경쟁률만 다른 행을 어디가 값으로 정정(반영은 안 함)
-        fixes = rate_fixes(rows, cache, 대학명)
+        fixes = rate_fixes(rows, cache, 대학명, unit_only="--strict-unit" in sys.argv)
         print(f"경쟁률 정정 대상 {len(fixes)}건")
         for rn, ident, old, new in fixes:
             print(f"  P{rn}  [{ident['모집기간']}{ident['지원군']}] {ident['모집단위']}/{ident['세부전형']}  {old} → {new}")
@@ -233,9 +238,10 @@ def main():
             print("\n(dry-run) --commit 붙이면 정정 실행")
         return
 
+    uo = "--strict-unit" in sys.argv             # 캠퍼스 공유 엑셀(경희·한국외대) 값폴백 끔
     idx = build_index(cache, 대학명, "2026")
-    out, held, moflag, recount = reflect(rows, idx)
-    ok = verify(rows, idx, recount)
+    out, held, moflag, recount = reflect(rows, idx, unit_only=uo)
+    ok = verify(rows, idx, recount, unit_only=uo)
 
     gi_cnt = Counter(r["모집기간"] for r in rows)
     print(f"파싱 {len(rows)}행 {dict(gi_cnt)} / 파서제외 {len(skipped)} / 매칭실패(보류) {len(held)}")
